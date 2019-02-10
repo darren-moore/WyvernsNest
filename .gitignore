@@ -60,8 +60,19 @@ ipch/
 .vs/
 .vscode/
 
+# DS files
+.DS_Store
+
 # DLL files
 *.dll
 
 # ZIP files
 *.zip
+
+# art files
+*.ase
+*.aseprite
+*.psd
+
+# Build directory
+build/

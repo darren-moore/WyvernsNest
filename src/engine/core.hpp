@@ -77,6 +77,11 @@ namespace Core {
 
 		}
 
+		inline void setAlpha(float a) {
+			Engine::get_instance().getRenderer()->setAlpha(a);
+
+		}
+
 	}
 
 	// Wrappers around text renderer functionalities
@@ -112,6 +117,15 @@ namespace Core {
 		inline void resumeAllAudio() {
 			Engine::get_instance().getMixer()->resumeAllAudio();
 		}
+
+		inline void fadeOutAllMusic(int ms) {
+			Engine::get_instance().getMixer()->fadeOutAllMusic(ms);
+		}
+
+		inline void fadeInAllMusic(const std::string &filePath, int ms, int loops = 0) {
+			Engine::get_instance().getMixer()->fadeInMusic(filePath, ms, loops);
+		}
+		
 	}
 
 }

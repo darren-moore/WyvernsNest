@@ -1,16 +1,37 @@
 #include "enemy.hpp"
 
 #include "../combat.hpp"
+#include "../util/attackloader.hpp"
 
 Enemy::Enemy() :
 	Unit(UnitType::ENEMY),
-	sprite("res/assets/enemies/WyvernFighter_Sprite.png")
+	sprite("res/assets/enemies/babygoomba.png", 64, 64),
+	bite(Attacks::get("PUNCH", this))
 {
 	sprite.setSize(sprite_width, sprite_height);
+	sprite.setSourceSize(64, 64);
+	
+	sprite.addAnimation(0, 0);			// IDLE
+	sprite.addAnimation(1, 1);			// DAMAGE
+	sprite.addAnimation(10, 17);		// DYING
+	sprite.addAnimation(18, 18);		// DEAD
 
-	// Set the enemy attacks to the same AoE attack
-	attack1 = Attack("AoE", this, AttackType::SELF, 0, new DamageEffect(2), 1, false);
-	attack2 = Attack("AoE", this, AttackType::SELF, 0, new DamageEffect(2), 1, false);
+	// Randomize enemy stats
+	UnitData data;
+	data.strength = rand() % 10 + 1;
+	data.dexterity = rand() % 10 + 1;
+	data.intelligence = rand() % 10 + 1;
+	data.constitution = rand() % 10 + 1;
+	setData(data);
+}
+
+Enemy::Enemy(UnitType type, const std::string& spritePath, int src_w, int src_h) :
+	Unit(type),
+	sprite(spritePath, src_w, src_h),
+	bite(Attacks::get("PUNCH", this))
+{
+	sprite.setSize(sprite_width, sprite_height);
+	sprite.setSourceSize(src_w, src_h);
 }
 
 Enemy::~Enemy()
@@ -19,16 +40,12 @@ Enemy::~Enemy()
 
 void Enemy::render()
 {
+	sprite.setPos(screenPosition.x(), screenPosition.y());
+	sprite.render();
 
 	if (state != UnitState::DEAD) {
-		shadow.render();
-
-		sprite.setPos(screenPosition.x(), screenPosition.y());
-		sprite.render();
+		renderHealth();
 	}
-
-	renderHealth();
-
 }
 
 void Enemy::update(int delta) {
@@ -74,33 +91,87 @@ void Enemy::takeTurn() {
 }
 
 void Enemy::handleMovement() {
-	// CHOOSE A RANDOM LOCATION ON THE GRID TO MOVE
-	int x = rand() % combat->grid.map_width;
-	int y = rand() % combat->grid.map_height;
-	// If the movement wasn't successful, skip directly to the attack
-	if (!move(*combat, Vec2<int>(x, y))) {
+	// Try to move to a random valid location
+	int x_offset;
+	int y_offset;
+	int tries = 10;
+	while (tries > 0) {
+		x_offset = rand() % (getMoveSpeed() * 2 + 1) - getMoveSpeed();
+		y_offset = rand() % (std::abs(getMoveSpeed() - std::abs(x_offset)) * 2 + 1) - std::abs(getMoveSpeed() - std::abs(x_offset));
+		if (getPath(*combat, position - Vec2<int>(x_offset, y_offset)).size() > 0) {
+			break;
+		}
+		tries--;
+	}
+	if (!move(*combat, position - Vec2<int>(x_offset, y_offset))) {
+		// Directly handle the attacks if no movement could be done
 		handleAttack();
 	}
 }
 
 void Enemy::handleAttack() {
-	int key = rand() % 2;
-	switch (key) {
-	case 0: {
+	Unit *targ_unit;
+	
+	targ_unit = combat->getUnitAt(position - Vec2<int>(1, 0));
+	if (targ_unit && targ_unit->getType() == UnitType::PLAYER) {
 		// do the action here
-		attack1.attack(position, *combat);
+		bite.attack(position - Vec2<int>(1, 0), *combat);
 		state = UnitState::ATTACK;
 		startCounter();
-	} break;
-	case 1: {
+		return;
+	}
+	targ_unit = combat->getUnitAt(position - Vec2<int>(0, 1));
+	if (targ_unit && targ_unit->getType() == UnitType::PLAYER) {
 		// do the action here
-		attack2.attack(position, *combat);
+		bite.attack(position - Vec2<int>(0, 1), *combat);
 		state = UnitState::ATTACK;
 		startCounter();
-	} break;
-	default: {
-		// do nothing
-	} break;
+		return;
+	}
+	targ_unit = combat->getUnitAt(position - Vec2<int>(-1, 0));
+	if (targ_unit && targ_unit->getType() == UnitType::PLAYER) {
+		// do the action here
+		bite.attack(position - Vec2<int>(-1, 0), *combat);
+		state = UnitState::ATTACK;
+		startCounter();
+		return;
+	}
+	targ_unit = combat->getUnitAt(position - Vec2<int>(0, -1));
+	if (targ_unit && targ_unit->getType() == UnitType::PLAYER) {
+		// do the action here
+		bite.attack(position - Vec2<int>(0, -1), *combat);
+		state = UnitState::ATTACK;
+		startCounter();
+		return;
+	}
+	// If no attacks could be done, set the unit to be at done state
+	state = UnitState::DONE;
+}
+
+void Enemy::setTileSizeCallback(int width, int height) {
+	// Calculate the sprite size based on the width/height
+	float width_ratio = static_cast<float>(64 / ENEMY_WIDTH_IN_SOURCE);
+	sprite_width = static_cast<int>(width_ratio * DEFAULT_WIDTH_TO_TILE * width);
+	float height_ratio = static_cast<float>(64 / ENEMY_HEIGHT_IN_SOURCE);
+	// TODO: include this in file metadata as well
+	float sprite_ratio = 1.f;
+	sprite_height = static_cast<int>(height_ratio * width * sprite_ratio);
+	sprite.setSize(sprite_width, sprite_height);
+	calculateScreenPosition();
+
+	// Also set the units height
+	unit_height = static_cast<int>(ENEMY_HEIGHT_IN_SOURCE * static_cast<float>(sprite_height) / 64.f);
+}
+
+void Enemy::takeDamageCallback(int damage) {
+	if (health >= 0) {
+		if (health - damage < 0) {
+			sprite.playAnimation(2);
+			sprite.queueAnimation(3);
+		} else {
+			sprite.playAnimation(1, 10);
+			sprite.queueAnimation(0);
+		}
 	}
 }
 

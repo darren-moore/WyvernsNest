@@ -27,12 +27,12 @@ void AttackLoader::loadAttacks() {
 	std::ifstream inp(ATTACK_FILE_LOCATION);
 	// Use the provided overloaded operators to load the json data
 	json data;
-	inp >> data;
+inp >> data;
 
-	// Load all the attacks individually
-	for (const json& attack : data["attacks"]) {
-		loadAttack(attack);
-	}
+// Load all the attacks individually
+for (const json& attack : data["attacks"]) {
+	loadAttack(attack);
+}
 }
 
 // The helper function to load an attack to the map based on its json data
@@ -51,13 +51,27 @@ bool AttackLoader::loadAttack(const json & data) {
 	}
 	if (effects.size() == 0) return false;
 	attacks[name] = Attack(
-		name, 
-		nullptr, 
-		type, 
-		range, 
-		effects[0], 
-		aoe, 
+		name,
+		nullptr,
+		type,
+		range,
+		effects[0],
+		aoe,
 		affect_self);
+	// Parse the modifiers here
+	for (const json& modifier : data["modifiers"]) {
+		attacks[name].addEffectModifier(parseModifier(modifier));
+	}
+	// Parse the particles here
+	for (const json& particle : data["particles"]) {
+		std::string particle_name = particle["name"];
+		if (particle["position"] == "TARGET") {
+			attacks[name].addParticle(particle_name, ParticlePosition::TARGET);
+		}
+		if (particle["position"] == "SELF") {
+			attacks[name].addParticle(particle_name, ParticlePosition::SELF);
+		}
+	}
 	return true;
 }
 
@@ -71,6 +85,9 @@ AttackType AttackLoader::getTypeFromString(const std::string & str) const {
 	if (str == "self") {
 		return AttackType::SELF;
 	}
+	if (str == "pierce") {
+		return AttackType::PIERCE;
+	}
 	return AttackType::INVALID;
 }
 
@@ -79,5 +96,56 @@ AttackEffect * AttackLoader::parseEffect(const json & data) const {
 		int damage = data["damage"];
 		return new DamageEffect(damage);
 	}
+	if (data["type"] == "heal") {
+		int heal = data["health"];
+		return new HealEffect(heal);
+	}
+	if (data["type"] == "burn") {
+		int damage = data["damage"];
+		int ticks = data["ticks"];
+		// TODO: Add ability to add infinite effect in file
+		return new BurnEffect(damage, ticks);
+	}
+	if (data["type"] == "buff") {
+		Stat stat;
+		if (data["stat"] == "STR") stat = Stat::STR;
+		if (data["stat"] == "DEX") stat = Stat::DEX;
+		if (data["stat"] == "INT") stat = Stat::INT;
+		if (data["stat"] == "CON") stat = Stat::CON;
+		float added_percent = data["percent"];
+		int ticks = data["ticks"];
+		// TODO: Add ability to add infinite effect in file
+		return new StatBuffEffect(stat, added_percent, ticks, false);
+	}
+	if (data["type"] == "push") {
+		int distance = data["distance"];
+		return new PushEffect(distance);
+	}
+	if (data["type"] == "move") {
+		return new MoveEffect();
+	}
+	if (data["type"] == "blink") {
+		return new BlinkEffect();
+	}
+	if (data["type"] == "resurrect") {
+		return new ResurrectEffect();
+	}
 	return nullptr;
+}
+
+EffectModifier AttackLoader::parseModifier(const json & data) const {
+	float mod = data["mod"];
+	if (data["type"] == "STR") {
+		return EffectModifier{ Stat::STR, mod };
+	}
+	if (data["type"] == "DEX") {
+		return EffectModifier{ Stat::DEX, mod };
+	}
+	if (data["type"] == "INT") {
+		return EffectModifier{ Stat::INT, mod };
+	}
+	if (data["type"] == "CON") {
+		return EffectModifier{ Stat::CON, mod };
+	}
+	return EffectModifier();
 }
